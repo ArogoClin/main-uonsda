@@ -1,10 +1,8 @@
+
 # IGNORE external projects only 
 ../ 
 "" 
-# DO NOT ignore backend/ and frontend/ 
-!backend/ 
-!frontend/ 
-"" 
+
 # Standard ignores 
 node_modules/ 
 .env 
