@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import AttendanceMarker from '../components/AttendanceMarker';
 import CommunionParticipation from '../components/CommunionParticipation';
-import hero_image from '../assets/images/hero-image.JPG';
+import hero_image from '../assets/images/hero-image.jpg';
 import api from '../services/api';
 
 // Import ministry images (you'll need to add these to your assets)
