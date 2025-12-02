@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
-import Redis from 'ioredis';
+import { createRedisClient } from '../config/redis.js';  // ✅ Import centralized Redis
 
 // ============================================================================
 // CONFIGURATION & CONSTANTS
@@ -44,7 +44,7 @@ const SERVICE_SCHEDULES = {
 const markAttendanceSchema = z.object({
   email: z.string().email('Invalid email address'),
   latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
+  longitude: z.number(). min(-180).max(180),
   deviceId: z.string().min(10, 'Invalid device ID'),
 });
 
@@ -54,7 +54,7 @@ const createLocationSchema = z. object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   radius: z.number().int().min(10).max(1000). default(CONFIG.DEFAULT_RADIUS),
-  address: z.string().optional(),
+  address: z.string(). optional(),
 });
 
 const setActiveLocationSchema = z.object({
@@ -134,8 +134,8 @@ class DuplicateDeviceError extends AttendanceError {
 class AttendanceService {
   constructor(prisma, redis, config = CONFIG) {
     this.prisma = prisma;
-    this.redis = redis;
-    this.config = config;
+    this. redis = redis;
+    this. config = config;
   }
 
   // ============================================================================
@@ -159,8 +159,8 @@ class AttendanceService {
 
     const a =
       Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math. cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math. sqrt(1 - a));
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math. atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c;
   }
@@ -243,7 +243,7 @@ class AttendanceService {
    * @throws {DuplicateDeviceError} If device already used by different member
    */
   async checkDeviceFingerprint(deviceId, email, serviceType) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date(). toISOString().split('T')[0];
     const deviceKey = `attendance:device:${deviceId}:${today}:${serviceType}`;
 
     const existingEmail = await this.redis.get(deviceKey);
@@ -278,7 +278,7 @@ class AttendanceService {
 
     // Check service time
     const { serviceType, isServiceTime } = this.getCurrentServiceInfo();
-    if (!isServiceTime || ! serviceType) {
+    if (!isServiceTime || !serviceType) {
       throw new NotServiceTimeError();
     }
 
@@ -345,7 +345,7 @@ class AttendanceService {
     }
 
     // Create attendance record
-    const attendance = await this.prisma.attendance.create({
+    const attendance = await this.prisma.attendance. create({
       data: {
         memberId: member.id,
         serviceType,
@@ -437,11 +437,11 @@ class AttendanceService {
     }
 
     if (filters.serviceType) {
-      where.serviceType = filters. serviceType;
+      where.serviceType = filters.serviceType;
     }
 
     if (filters.memberId) {
-      where.memberId = filters.memberId;
+      where.memberId = filters. memberId;
     }
 
     const [attendances, byService] = await Promise.all([
@@ -502,10 +502,10 @@ class AttendanceService {
 
     return {
       member: {
-        id: member. id,
-        firstName: member. firstName,
-        lastName: member. lastName,
-        email: member. email,
+        id: member.id,
+        firstName: member.firstName,
+        lastName: member.lastName,
+        email: member.email,
       },
       totalAttendances,
       byService,
@@ -562,7 +562,7 @@ class AttendanceService {
    * @returns {Promise<Object>} Updated location
    */
   async setActiveLocation(locationId, services) {
-    const location = await this.prisma.churchLocation.findUnique({
+    const location = await this. prisma.churchLocation.findUnique({
       where: { id: locationId },
     });
 
@@ -887,13 +887,9 @@ export function createAttendanceController(prisma, redis) {
 // DEFAULT EXPORT (for backward compatibility)
 // ============================================================================
 
-// If you want to use it without dependency injection (not recommended for production)
+// ✅ FIXED: Use centralized Redis client
 const defaultPrisma = new PrismaClient();
-const defaultRedis = new Redis({
-  host: process.env. REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD,
-});
+const defaultRedis = createRedisClient();  // ✅ Use factory function! 
 
 const defaultController = createAttendanceController(defaultPrisma, defaultRedis);
 
@@ -901,10 +897,20 @@ const defaultController = createAttendanceController(defaultPrisma, defaultRedis
 export const markAttendance = defaultController.markAttendance;
 export const getServiceStatus = defaultController.getServiceStatus;
 export const getAttendance = defaultController.getAttendance;
-export const getMemberAttendance = defaultController.getMemberAttendance;
-export const getAllLocations = defaultController.getAllLocations;
-export const createLocation = defaultController. createLocation;
+export const getMemberAttendance = defaultController. getMemberAttendance;
+export const getAllLocations = defaultController. getAllLocations;
+export const createLocation = defaultController.createLocation;
 export const setActiveLocation = defaultController.setActiveLocation;
 export const updateLocation = defaultController.updateLocation;
 export const deleteLocation = defaultController.deleteLocation;
 export const getActiveLocations = defaultController.getActiveLocations;
+
+// Export classes for advanced usage
+export {
+  AttendanceService,
+  AttendanceController,
+  AttendanceError,
+  NotServiceTimeError,
+  LocationOutOfBoundsError,
+  DuplicateDeviceError,
+};
