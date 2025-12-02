@@ -57,7 +57,7 @@ export default function Login() {
         localStorage.setItem('admin', JSON.stringify(response.data.data.admin));
 
         // Redirect to dashboard
-        navigate('/admin');
+        navigate('/admin/dashboard');
       }
     } catch (err: any) {
       console.error('Login error:', err);
