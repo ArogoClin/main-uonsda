@@ -9,6 +9,7 @@ import memberRoutes from './routes/member.routes.js';
 import attendanceRoutes from './routes/attendance.routes.js';
 import communionRoutes from './routes/communion.routes.js';
 import reportRoutes from './routes/reports.routes.js';
+import missionRoutes from './routes/mission.routes.js';
 
 // Load environment variables
 dotenv.config();
@@ -46,7 +47,8 @@ app.get('/', (req, res) => {
       attendance: '/api/attendance',
       communion: '/api/communion',
       reports: '/api/reports',
-      health: '/health'
+      health: '/health',
+      missions: '/api/missions',
     }
   });
 });
@@ -66,6 +68,7 @@ app.use('/api/members', memberRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/communion', communionRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/missions', missionRoutes);
 
 // ============================================
 // ERROR HANDLING

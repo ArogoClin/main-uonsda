@@ -84,63 +84,55 @@ export const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Validate input
-    if (!email || !password) {
-      return res.status(400).json({
+    if (!  email || ! password) {
+      return res. status(400).json({
         success: false,
-        message: 'Please provide email and password'
+        message: 'Please provide email and password',
       });
     }
 
-    // Find admin by email
     const admin = await prisma.admin.findUnique({
-      where: { email }
+      where: { email: email.toLowerCase() },
     });
 
-    // Check if admin exists
     if (!admin) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid credentials',
       });
     }
 
-    // Check if admin is active
     if (!admin.isActive) {
       return res.status(403).json({
         success: false,
-        message: 'Account is deactivated. Contact administrator.'
+        message: 'Account is deactivated. Contact administrator.',
       });
     }
 
-    // Compare password with hashed password
     const isPasswordValid = await bcrypt.compare(password, admin.password);
 
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Invalid credentials',
       });
     }
 
-    // Update last login time
-    await prisma.admin.update({
+    // ✅ UPDATE: Mark as not first login & update last login
+    await prisma.admin.  update({
       where: { id: admin.id },
-      data: { lastLogin: new Date() }
+      data: {
+        lastLogin: new Date(),
+        isFirstLogin: false,  // ✅ ADD THIS
+      },
     });
 
-    // Generate JWT token
     const token = jwt.sign(
-      {
-        id: admin.id,
-        email: admin.email,
-        role: admin.role
-      },
+      { id: admin.id, email: admin.email, role: admin.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      { expiresIn: '7d' }
     );
 
-    // Return token and user data (exclude password)
     res.json({
       success: true,
       message: 'Login successful',
@@ -153,16 +145,17 @@ export const loginAdmin = async (req, res) => {
           email: admin.email,
           role: admin.role,
           phone: admin.phone,
-          lastLogin: admin.lastLogin
-        }
-      }
+          lastLogin: admin.lastLogin,
+          isFirstLogin: admin.isFirstLogin, 
+        },
+      },
     });
   } catch (error) {
     console.error('Error logging in:', error);
     res.status(500).json({
       success: false,
       message: 'Login failed',
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -366,6 +359,305 @@ export const updateAdminStatus = async (req, res) => {
       success: false,
       message: 'Failed to update admin status',
       error: error.message
+    });
+  }
+};
+
+/**
+ * First-time PASTORATE registration with special code
+ * @route POST /api/auth/pastorate/register
+ * @access Public (but requires special code)
+ */
+export const registerPastorate = async (req, res) => {
+  try {
+    const { firstName, lastName, email, password, phone, registrationCode } = req.body;
+
+    // ✅ VERIFY REGISTRATION CODE
+    const VALID_CODE = 'UONSDAMISSIONS2025';
+    
+    if (registrationCode !== VALID_CODE) {
+      return res.status(403).json({
+        success: false,
+        message: 'Invalid registration code.  Contact system administrator.',
+      });
+    }
+
+    // Validate required fields
+    if (!firstName || ! lastName || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required fields',
+      });
+    }
+
+    // Password validation
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long',
+      });
+    }
+
+    // ✅ CHECK: Maximum 3 PASTORATE accounts allowed
+    const pastorateCount = await prisma. admin.count({
+      where: { role: 'PASTORATE' },
+    });
+
+    if (pastorateCount >= 3) {
+      return res.status(400).json({
+        success: false,
+        message: 'Maximum limit of 3 PASTORATE accounts reached.  Contact existing PASTORATE to get access.',
+      });
+    }
+
+    // Check if email already exists
+    const existingEmail = await prisma.admin.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (existingEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already registered',
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // ✅ CREATE PASTORATE ADMIN
+    const admin = await prisma.admin.create({
+      data: {
+        firstName,
+        lastName,
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        role: 'PASTORATE',
+        phone: phone || null,
+        isActive: true,
+        isFirstLogin: true,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        phone: true,
+        createdAt: true,
+      },
+    });
+
+    // Generate JWT token for immediate login
+    const token = jwt. sign(
+      { id: admin.id, email: admin.email, role: admin.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // ✅ Log how many slots remain
+    console.log(`✅ PASTORATE account created: ${admin.email}`);
+    console.log(`   Remaining slots: ${3 - pastorateCount - 1}/3`);
+
+    res.status(201).json({
+      success: true,
+      message: `PASTORATE account created successfully (${pastorateCount + 1}/3 slots used)`,
+      data: {
+        token,
+        admin,
+      },
+    });
+  } catch (error) {
+    console.error('Error registering PASTORATE:', error);
+    res. status(500).json({
+      success: false,
+      message: 'Failed to register PASTORATE',
+      error: error.message,
+    });
+  }
+};
+
+
+/**
+ * Admin registration with role-based limits and codes
+ * @route POST /api/auth/admin/register
+ * @access Public (but requires role-specific code)
+ */
+export const registerAdminWithCode = async (req, res) => {
+  try {
+    const { firstName, lastName, email, password, phone, role, registrationCode } = req.body;
+
+    // ✅ Define role limits and codes
+    const ROLE_CONFIG = {
+      PASTORATE: {
+        code: 'UONSDAMISSIONS2025',
+        maxCount: 3,
+        label: 'PASTORATE',
+      },
+      ELDER: {
+        code: 'UONSDA-ELDER-2025',
+        maxCount: 5,
+        label: 'ELDER',
+      },
+      CLERK: {
+        code: 'UONSDA-CLERK-2025',
+        maxCount: 10,
+        label: 'CLERK',
+      },
+    };
+
+    // Validate role
+    if (!role || ! ROLE_CONFIG[role]) {
+      return res.status(400). json({
+        success: false,
+        message: 'Invalid role specified',
+      });
+    }
+
+    const config = ROLE_CONFIG[role];
+
+    // ✅ VERIFY REGISTRATION CODE
+    if (registrationCode !== config.code) {
+      return res.status(403).json({
+        success: false,
+        message: `Invalid registration code for ${config.label} role`,
+      });
+    }
+
+    // Validate required fields
+    if (!firstName || ! lastName || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required fields',
+      });
+    }
+
+    // Password validation
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long',
+      });
+    }
+
+    // ✅ CHECK: Role-specific limit
+    const roleCount = await prisma.admin.count({
+      where: { role },
+    });
+
+    if (roleCount >= config.maxCount) {
+      return res.status(400). json({
+        success: false,
+        message: `Maximum limit of ${config.maxCount} ${config.label} accounts reached.  Contact existing ${config.label} for access.`,
+      });
+    }
+
+    // Check if email already exists
+    const existingEmail = await prisma.admin.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (existingEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already registered',
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // ✅ CREATE ADMIN
+    const admin = await prisma.admin.create({
+      data: {
+        firstName,
+        lastName,
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        role,
+        phone: phone || null,
+        isActive: true,
+        isFirstLogin: true,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        phone: true,
+        createdAt: true,
+      },
+    });
+
+    // Generate JWT token for immediate login
+    const token = jwt.sign(
+      { id: admin.id, email: admin.email, role: admin. role },
+      process.env. JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // ✅ Log account creation
+    console.log(`✅ ${config.label} account created: ${admin.email}`);
+    console.log(`   Remaining slots: ${config.maxCount - roleCount - 1}/${config.maxCount}`);
+
+    res.status(201).json({
+      success: true,
+      message: `${config.label} account created successfully (${roleCount + 1}/${config.maxCount} slots used)`,
+      data: {
+        token,
+        admin,
+      },
+    });
+  } catch (error) {
+    console.error('Error registering admin:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to register admin',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get role count for availability check
+ * @route GET /api/auth/admin/count/:role
+ * @access Public
+ */
+export const getRoleCount = async (req, res) => {
+  try {
+    const { role } = req.params;
+
+    const LIMITS = {
+      PASTORATE: 3,
+      ELDER: 5,
+      CLERK: 10,
+    };
+
+    if (!LIMITS[role]) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role',
+      });
+    }
+
+    const count = await prisma.admin.count({
+      where: { role },
+    });
+
+    res.json({
+      success: true,
+      role,
+      count,
+      max: LIMITS[role],
+      available: LIMITS[role] - count,
+      isFull: count >= LIMITS[role],
+    });
+  } catch (error) {
+    console. error('Error getting role count:', error);
+    res. status(500).json({
+      success: false,
+      message: 'Failed to get count',
     });
   }
 };

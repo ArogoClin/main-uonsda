@@ -28,7 +28,7 @@ const SERVICE_SCHEDULES = {
   },
   WEDNESDAY_VESPERS: {
     day: 3, // Wednesday
-    startHour: 12,
+    startHour: 17,
     endHour: 20,
     name: 'Wednesday Vespers',
     displayTime: 'Wednesday 5:00 PM - 8:00 PM',

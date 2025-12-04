@@ -44,6 +44,15 @@ router.put('/password', authenticate, authController.updatePassword);
  */
 router.post('/register', authenticate, authorize('ELDER'), authController.registerAdmin);
 
+
+/**
+ * @route  POST /api/pastorate-register
+ * @desc   Register new pastorate admin (PASTORATE only)
+ * @access Private (PASTORATE)
+ */
+router.post('/pastorate/register', authController.registerPastorate );
+
+
 /**
  * @route   GET /api/auth/admins
  * @desc    Get all admins (ELDER only)
@@ -57,5 +66,20 @@ router.get('/admins', authenticate, authorize('ELDER'), authController.getAllAdm
  * @access  Private (ELDER)
  */
 router.put('/admins/:id/status', authenticate, authorize('ELDER'), authController.updateAdminStatus);
+
+
+
+/** * @route   POST /api/auth/admin/register
+ * @desc    Register new admin with registration code
+ * @access  Public
+ */ 
+router.post('/admin/register', authController.registerAdminWithCode);
+
+
+/** * @route   GET /api/auth/admin/count/:role
+ * @desc    Get count of admins by role (ELDER only)
+ * @access  Private 
+ */
+router.get('/admin/count/:role', authController.getRoleCount);
 
 export default router;

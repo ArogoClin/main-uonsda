@@ -6,10 +6,10 @@ import api from '../services/api';
 
 // Import ministry images
 const ministryImages = {
-  FOJ: '/src/assets/images/foj. jpg',
-  ARK: '/src/assets/images/ark.jpg',
-  VINEYARD: '/src/assets/images/vineyard.jpg',
-  PILGRIMS: '/src/assets/images/pilgrims.jpg' 
+  FOJ: '/images/foj.jpg',
+  ARK: '/images/ark.jpg',
+  VINEYARD: '/images/vineyard.jpg',
+  PILGRIMS: '/images/pilgrims.jpg' 
 };
 
 export default function Home() {
@@ -52,13 +52,13 @@ export default function Home() {
               {/* Transparent background + proper scaling */}
               <div className="w-10 h-10 rounded-xl overflow-hidden bg-transparent flex items-center justify-center">
                 <img 
-                  src="/src/assets/images/logo2.png" 
-                  alt="UONSDA Logo" 
+                  src="/logo2.png" 
+                  alt="UoNSDA Logo" 
                   className="w-9 h-9 object-contain" 
                 />
               </div>
               <span className="hidden sm:block font-extrabold text-xl tracking-tight text-gray-900">
-                UONSDA Main
+                UoNSDA Main
               </span>
             </div>
             {/* Desktop Navigation */}
@@ -143,7 +143,7 @@ export default function Home() {
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold text-white mb-6 leading-tight">
               Welcome to <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">
-                UONSDA Church
+                UoNSDA Church
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-200 mb-10 leading-relaxed">
@@ -446,7 +446,7 @@ export default function Home() {
               <div className="flex items-center space-x-3 mb-4">
                 <div className="w-12 h-12 rounded-xl overflow-hidden shadow-xl ">
                   <img 
-                    src="/src/assets/images/logo2.png" 
+                    src="/logo2.png" 
                     alt="UONSDA" 
                     className="w-full h-full object-contain"
                   />
@@ -478,6 +478,7 @@ export default function Home() {
                 <li><button onClick={() => scrollToSection('ministries')} className="text-gray-400 hover:text-white transition-colors">Ministries</button></li>
                 <li><a href="/register" className="text-gray-400 hover:text-white transition-colors">Register</a></li>
                 <li><a href="/qr-code" className="text-gray-400 hover:text-white transition-colors">QR Code</a></li>
+                 <li><a href="/admin/missions" className="text-gray-400 hover:text-white transition-colors">Missions</a></li>
               </ul>
             </div>
 

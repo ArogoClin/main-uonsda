@@ -15,11 +15,17 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await api.post('/api/auth/login', { email, password });
+      const res = await api. post('/api/auth/login', { email, password });
       if (res.data.success && res.data.data) {
         localStorage.setItem('token', res.data.data.token);
-        localStorage.setItem('admin', JSON.stringify(res.data.data.admin));
-        navigate('/admin');
+        localStorage.setItem('admin', JSON.stringify(res.data. data.admin));
+        
+        const admin = res.data.data.admin;
+        if (admin.role === 'PASTORATE') {
+          navigate('/admin/pastorate', { replace: true });
+        } else {
+          navigate('/admin/dashboard', { replace: true });
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid email or password');
@@ -33,9 +39,9 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="mx-auto w-24 h-24 rounded-2xl overflow-hidden shadow-2xl ring-8 ring-white/50 bg-white">
+          <div className="mx-auto w-20 h-20 rounded-2xl overflow-hidden shadow-2xl ring-8 ring-white/50 bg-white">
             <img 
-              src="/src/assets/images/adventist-symbol-circle--white.png" 
+              src="/logo2.png"
               alt="UONSDA Logo" 
               className="w-full h-full object-contain"
             />
@@ -72,7 +78,7 @@ export default function Login() {
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e. target.value)}
                 required
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-4 focus:ring-orange-500/30 focus:border-orange-500 outline-none transition"
                 placeholder="••••••••"
@@ -84,8 +90,8 @@ export default function Login() {
               disabled={loading}
               className="w-full py-4 bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-gray-900 font-bold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? (
-                <>Signing in...</>
+              {loading ?  (
+                <>Signing in... </>
               ) : (
                 <>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,8 +103,21 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="px-8 pb-6 text-center">
-            <a href="/" className="text-orange-600 hover:text-orange-700 text-sm font-medium">
+          {/* ✅ UPDATED LINKS */}
+          <div className="px-8 pb-6 text-center space-y-2">
+            <a 
+              href="/admin/register" 
+              className="block text-orange-600 hover:text-orange-700 text-sm font-medium"
+            >
+              First-time admin registration →
+            </a>
+            <p className="text-xs text-gray-500">
+              PASTORATE • ELDER • CLERK
+            </p>
+            <a 
+              href="/" 
+              className="block text-gray-500 hover:text-gray-700 text-sm mt-2"
+            >
               ← Back to Home
             </a>
           </div>

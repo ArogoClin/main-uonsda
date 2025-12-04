@@ -43,6 +43,7 @@ model Admin {
   role      AdminRole @default(CLERK)
   phone     String?
   isActive  Boolean   @default(true)
+  isFirstLogin Boolean   @default(true)
   lastLogin DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -131,6 +132,81 @@ model CommunionRecord {
   @@index([memberId])
 }
 
+// Mission Models
+model Mission {
+  id          String   @id @default(uuid())
+  name        String   @unique // e.g., "December 2025 Mission"
+  location    String   // e.g., "Kajiado"
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean  @default(false)
+  numberOfSites Int    @default(5)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  registrations MissionRegistration[]
+  distributions MissionDistribution[]
+}
+
+model MissionRegistration {
+  id          String   @id @default(uuid())
+  missionId   String
+  firstName   String
+  lastName    String
+  email       String
+  phone       String? 
+  gender      Gender
+  campus      Campus
+  yearOfStudy Int?
+  isVisitor   Boolean  @default(false)
+  homeChurch  String?  // For visitors
+
+  previousMissionsCount Int     @default(0)
+  isFirstTime Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  
+  mission     Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  distribution MissionDistribution? 
+  
+  @@unique([missionId, email])
+}
+
+model MissionDistribution {
+  id             String   @id @default(uuid())
+  missionId      String
+  registrationId String   @unique
+  siteNumber     Int      // 1, 2, 3, 4, 5, etc. 
+  siteName       String?   // Optional: "Site A", "Ngong Road", etc.
+  createdAt      DateTime @default(now())
+  
+  mission        Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  registration   MissionRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+}
+
+enum Campus {
+  KENYA_SCIENCE
+  MEDICAL_SCHOOL 
+  MAIN
+  CHIROMO
+  LOWER_KABETE
+  PARKLANDS
+  UPPER_KABETE
+  PUEA
+  ASSOCIATE
+  KIKUYU
+  VISITOR
+}
+
+enum YearGroup {
+  MILLERITES
+  SERAPHS
+  VALOURS
+  REMNANTS
+  PIONEERS
+  AMBASSADORS
+  OTHER
+}
+
 enum Ministry {
   FOJ
   ARK
@@ -152,6 +228,7 @@ enum Gender {
 enum AdminRole {
   ELDER
   CLERK
+  PASTORATE
 }
 
 enum ServiceType {
