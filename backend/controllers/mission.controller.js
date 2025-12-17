@@ -2065,15 +2065,20 @@ class MissionController {
   // MISSION EXPERIENCE - Default to 0 (First Time) if missing
   // ============================================================================
   const missionExpRaw = getColumn(
-    row,
-    'Number of missions attended before',
-    'number of missions attended before',
-    'Previous Missions',
-    'previous missions',
-    'previousMissions',
-    'missions attended',
-    'missionsAttended'
-  );
+  row,
+  'Mission Experience',           // ✅ ADDED - matches your Excel column! 
+  'mission experience',           // ✅ ADDED - lowercase version
+  'Number of missions attended before',
+  'number of missions attended before',
+  'Previous Missions',
+  'previous missions',
+  'previousMissions',
+  'missions attended',
+  'missionsAttended',
+  'Experience',                   // ✅ ADDED - short version
+  'experience'                    // ✅ ADDED - lowercase
+);
+
 
   const autoDetected = await detectMissionExperience(email, missionId, prisma);
   const experience = mergeMissionExperience(missionExpRaw, autoDetected);
