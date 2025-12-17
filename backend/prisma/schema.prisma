@@ -168,7 +168,7 @@ model MissionRegistration {
   mission     Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
   distribution MissionDistribution? 
   
-  @@unique([missionId, email])
+  @@unique([missionId, email, firstName, lastName])
 }
 
 model MissionDistribution {

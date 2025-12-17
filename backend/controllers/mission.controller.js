@@ -99,6 +99,24 @@ class MissionaryDistributor {
     this.balanceCampuses();
     this.balanceYearsOfStudy();
     
+    const totalDistributed = this.sites.reduce((sum, site) => sum + site.stats.total, 0);
+    console.log('\n📊 FINAL DISTRIBUTION SUMMARY:');
+    console.log(`  Total to distribute: ${this.registrations.length}`);
+    console.log(`  Total distributed: ${totalDistributed}`);
+    console.log(`  Missing:  ${this.registrations.length - totalDistributed}`);
+
+    if (totalDistributed !== this.registrations.length) {
+      console.error(`\n❌ CRITICAL ERROR: ${this.registrations.length - totalDistributed} people were not assigned!`);
+      
+      // Find missing people
+      const assignedIds = new Set();
+      this.sites.forEach(site => {
+        site.missionaries.forEach(m => assignedIds.add(m. id));
+      });
+      const missing = this.registrations.filter(r => !assignedIds. has(r.id));
+      console.error('Missing:', missing.map(m => `${m.firstName} ${m.lastName}`));
+    }
+
     console.log('✅ Distribution complete');
     return this.sites;
   }
@@ -319,26 +337,30 @@ class MissionaryDistributor {
   }
 
   optimizeByMoving() {
-    let movesMade = 0;
-    
-    this.sites.forEach(site => {
-      const moveCandidates = site.missionaries.filter(person => {
-        const currentFit = this.calculatePersonFitScore(person, site);
-        const bestAlternative = this.findBestSite(person, site);
-        const alternativeFit = this.calculatePersonFitScore(person, bestAlternative);
-        
-        return alternativeFit < currentFit - 1.0;
-      });
+  let movesMade = 0;
+  
+  this.sites.forEach(site => {
+    const moveCandidates = site.missionaries.filter(person => {
+      const currentFit = this.calculatePersonFitScore(person, site);
+      const bestAlternative = this.findBestSite(person, site);
+      const alternativeFit = this.calculatePersonFitScore(person, bestAlternative);
       
-      moveCandidates.forEach(person => {
-        const newSite = this.findBestSite(person, site);
-        if (newSite !== site && this.canSwapLenient(site, newSite, person)) {
-          this.movePerson(site, newSite, person);
-          movesMade++;
-        }
-      });
+      return alternativeFit < currentFit - 1.0;
     });
-  }
+    
+    moveCandidates.forEach(person => {
+      const newSite = this.findBestSite(person, site);
+      // ✅ FIX:  Removed strict constraint check - always allow moves if score improves
+      // Previously: if (newSite !== site && this.canSwapLenient(site, newSite, person))
+      if (newSite !== site) {
+        this.movePerson(site, newSite, person);
+        movesMade++;
+      }
+    });
+  });
+  
+  console.log(`  ℹ️ Made ${movesMade} moves during optimization`);
+}
 
   simulatedAnnealing(temperature) {
     const iterations = 50;
@@ -504,24 +526,37 @@ class MissionaryDistributor {
   }
 
   balanceTotalsAcrossAllSites() {
-    const avgPerSite = this.registrations.length / this.numberOfSites;
+  const avgPerSite = this.registrations.length / this. numberOfSites;
+  
+  console.log(`  🔧 Balancing totals (target: ${avgPerSite.toFixed(1)} per site)`);
+  
+  for (let i = 0; i < 5; i++) {
+    const overstaffed = this.sites.filter(s => s.stats.total > avgPerSite + 0.5);
+    const understaffed = this.sites.filter(s => s.stats.total < avgPerSite - 0.5);
     
-    for (let i = 0; i < 5; i++) {
-      const overstaffed = this.sites.filter(s => s.stats.total > avgPerSite + 0.5);
-      const understaffed = this.sites.filter(s => s.stats.total < avgPerSite - 0.5);
+    if (overstaffed.length === 0 || understaffed.length === 0) break;
+    
+    overstaffed.forEach(fromSite => {
+      const toSite = understaffed[0];
       
-      if (overstaffed.length === 0 || understaffed.length === 0) break;
+      // ✅ FIX: Only move if toSite still needs people
+      if (toSite.stats.total >= avgPerSite) return;
       
-      overstaffed.forEach(fromSite => {
-        const toSite = understaffed[0];
-        const person = this.findBestPersonToMove(fromSite, toSite);
-        
-        if (person) {
-          this.movePerson(fromSite, toSite, person);
-        }
-      });
-    }
+      const person = this.findBestPersonToMove(fromSite, toSite);
+      
+      if (person) {
+        console.log(`    Moving ${person.firstName} from Site ${fromSite. siteNumber} (${fromSite.stats.total}) to Site ${toSite.siteNumber} (${toSite.stats.total})`);
+        this.movePerson(fromSite, toSite, person);
+      }
+    });
   }
+  
+  // ✅ Verify no one was lost
+  const totalAfter = this.sites.reduce((sum, s) => sum + s.stats.total, 0);
+  if (totalAfter !== this.registrations.length) {
+    console.error(`❌ BALANCE ERROR: Started with ${this.registrations.length}, now have ${totalAfter}`);
+  }
+}
 
   balanceCampuses() {
     const allCampuses = {};
@@ -867,7 +902,7 @@ class MissionController {
       });
     }
 
-    console.log(`📤 File upload: ${req.file.originalname} (${req.file.mimetype})`);
+    console.log(`📤 File upload:  ${req.file.originalname} (${req.file.mimetype})`);
 
     const mission = await prisma.mission.findUnique({ where: { id } });
     if (!mission) {
@@ -880,40 +915,40 @@ class MissionController {
     let registrations = [];
     
     // Get file extension to determine type
-    const fileExtension = path.extname(req.file.originalname).toLowerCase();
+    const fileExtension = path.extname(req.file. originalname).toLowerCase();
     console.log(`📋 File extension: ${fileExtension}`);
 
     // Parse file based on extension
     if (fileExtension === '.csv') {
       console.log('📊 Parsing as CSV...');
-      registrations = await this.parseCSV(req.file.buffer);
+      registrations = await this.parseCSV(req.file. buffer);
     } else if (fileExtension === '.xlsx' || fileExtension === '.xls') {
       console.log('📊 Parsing as Excel...');
-      registrations = await this.parseExcel(req.file.buffer);
+      registrations = await this.parseExcel(req. file.buffer);
     } else {
       return res.status(400).json({
         success: false,
-        message: `Unsupported file type: ${fileExtension}. Please upload a .csv, .xls, or .xlsx file.`,
+        message: `Unsupported file type: ${fileExtension}.  Please upload a .csv, .xls, or .xlsx file.`,
       });
     }
 
-    console.log(`✅ Parsed ${registrations.length} rows`);
+    console.log(`✅ Parsed ${registrations. length} rows`);
 
-    if (!registrations || registrations.length === 0) {
+    if (! registrations || registrations.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No valid data found in the uploaded file. Please check the file format.',
+        message: 'No valid data found in the uploaded file.  Please check the file format.',
       });
     }
 
     console.log('🔄 Normalizing registrations in batches...');
 
-    // ✅ FIX: Normalize in batches to avoid connection pool exhaustion
+    // ✅ FIX:  Normalize in batches to avoid connection pool exhaustion
     const NORMALIZE_BATCH_SIZE = 10;
     const normalized = [];
     const errors = [];
     
-    for (let i = 0; i < registrations.length; i += NORMALIZE_BATCH_SIZE) {
+    for (let i = 0; i < registrations. length; i += NORMALIZE_BATCH_SIZE) {
       const batch = registrations.slice(i, i + NORMALIZE_BATCH_SIZE);
       console.log(`  Normalizing batch ${Math.floor(i / NORMALIZE_BATCH_SIZE) + 1}/${Math.ceil(registrations.length / NORMALIZE_BATCH_SIZE)}`);
       
@@ -941,9 +976,9 @@ class MissionController {
       });
     }
 
-    console.log(`✅ Normalized ${normalized.length} registrations`);
+    console.log(`✅ Normalized ${normalized. length} registrations`);
     if (errors.length > 0) {
-      console.log(`⚠️ ${errors.length} rows had errors`);
+      console.log(`⚠️ ${errors. length} rows had errors`);
     }
 
     // Validate
@@ -951,7 +986,7 @@ class MissionController {
     const campusValidation = validateCampusNames(campusNames);
 
     const yearsOfStudy = registrations
-      .map((r) => r.yearOfStudy || r['What´s your year of study?'] || r["What's your year of study?"])
+      . map((r) => r.yearOfStudy || r['What´s your year of study?'] || r["What's your year of study?"])
       .filter(Boolean);
     const yearValidation = validateYearOfStudy(yearsOfStudy);
 
@@ -966,10 +1001,10 @@ class MissionController {
       console.log(`  Saving batch ${Math.floor(i / DB_BATCH_SIZE) + 1}/${Math.ceil(normalized.length / DB_BATCH_SIZE)} (${batch.length} records)`);
       
       const batchResults = await Promise.all(
-        batch.map((reg) =>
+        batch. map((reg) =>
           prisma.missionRegistration.upsert({
             where: {
-              missionId_email: {
+              missionId_email:  {
                 missionId: id,
                 email: reg.email,
               },
@@ -986,12 +1021,22 @@ class MissionController {
       created.push(...batchResults);
       
       // Small delay between batches
-      if (i + DB_BATCH_SIZE < normalized.length) {
+      if (i + DB_BATCH_SIZE < normalized. length) {
         await delay(100);
       }
     }
 
     console.log(`✅ Saved ${created.length} registrations`);
+
+    // ✅ FIX: Wait for database to fully commit before responding
+    await delay(500); // Give database time to commit all transactions
+
+    // ✅ Verify count in database
+    const verifyCount = await prisma.missionRegistration.count({
+      where: { missionId: id }
+    });
+
+    console.log(`🔍 Verification:  ${created.length} created, ${verifyCount} in database`);
 
     res.json({
       success: true,
@@ -1010,8 +1055,8 @@ class MissionController {
           female: normalized.filter((r) => r.gender === 'FEMALE').length,
           firstTimers: normalized.filter((r) => r.isFirstTime).length,
           visitors: normalized.filter((r) => r.isVisitor).length,
-          byCampus: normalized.reduce((acc, r) => {
-            acc[r.campus] = (acc[r.campus] || 0) + 1;
+          byCampus:  normalized.reduce((acc, r) => {
+            acc[r. campus] = (acc[r. campus] || 0) + 1;
             return acc;
           }, {}),
         },
@@ -1021,7 +1066,7 @@ class MissionController {
     console.error('Upload registrations error:', error);
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to upload registrations',
+      message: error. message || 'Failed to upload registrations',
     });
   }
 }
@@ -1034,9 +1079,9 @@ class MissionController {
     try {
       const { id } = req.params;
 
-      const mission = await prisma. mission.findUnique({
+      const mission = await prisma.mission.findUnique({
         where: { id },
-        include: {
+        include:  {
           registrations: true,
         },
       });
@@ -1044,31 +1089,76 @@ class MissionController {
       if (! mission) {
         return res. status(404).json({
           success: false,
-          message: 'Mission not found',
+          message:  'Mission not found',
         });
       }
 
       if (mission.registrations.length === 0) {
-        return res.status(400).json({
+        return res. status(400).json({
           success: false,
-          message: 'No registrations found for this mission',
+          message:  'No registrations found for this mission',
         });
       }
 
       // Run distribution algorithm
       const distributor = new MissionaryDistributor(
-        mission.registrations,
+        mission. registrations,
         mission.numberOfSites
       );
+      
       // In distributeMissionaries method, right before calling distributor.distribute()
       console.log('📊 Registration Analysis:');
       console.log('Total registrations:', mission.registrations.length);
       console.log('Males:', mission.registrations.filter(r => r.gender === 'MALE').length);
       console.log('Females:', mission.registrations.filter(r => r.gender === 'FEMALE').length);
-      console.log('Null/Invalid gender:', mission.registrations.filter(r => !r.gender || (r.gender !== 'MALE' && r.gender !== 'FEMALE')).length);
-      console.log('First timers:', mission.registrations.filter(r => r.previousMissionsCount === 0).length);
+      console.log('Null/Invalid gender:', mission.registrations.filter(r => !r. gender || (r.gender !== 'MALE' && r.gender !== 'FEMALE')).length);
+      console.log('First timers:', mission.registrations. filter(r => r.previousMissionsCount === 0).length);
       console.log('Sample registration:', mission.registrations[0]);
-      const distributedSites = distributor.distribute();
+      
+      const distributedSites = distributor. distribute();
+
+      // ✅ FIX: Verify EVERYONE got assigned
+      const totalAssigned = distributedSites.reduce((sum, site) => sum + site.missionaries.length, 0);
+      const totalRegistrations = mission.registrations.length;
+
+      console.log(`\n📊 Distribution verification:  ${totalAssigned}/${totalRegistrations} assigned`);
+
+      if (totalAssigned !== totalRegistrations) {
+        console.error(`❌ DISTRIBUTION ERROR: ${totalRegistrations - totalAssigned} people not assigned! `);
+        
+        // Find who's missing
+        const assignedIds = new Set();
+        distributedSites.forEach(site => {
+          site. missionaries.forEach(m => assignedIds.add(m.id));
+        });
+        
+        const missing = mission.registrations.filter(r => !assignedIds.has(r.id));
+        console.error('❌ Missing people:', missing.map(m => `${m.firstName} ${m. lastName} (${m.email})`));
+        
+        // Force assign missing people using round-robin
+        let siteIndex = 0;
+        missing.forEach(person => {
+          console.log(`  🔧 Force-assigning ${person.firstName} ${person.lastName} to Site ${distributedSites[siteIndex]. siteNumber}`);
+          distributedSites[siteIndex]. missionaries.push(person);
+          
+          // Update site stats
+          distributedSites[siteIndex].stats.total++;
+          distributedSites[siteIndex].stats[person.gender === 'MALE' ? 'male' : 'female']++;
+          distributedSites[siteIndex].stats.campuses[person.campus] = (distributedSites[siteIndex].stats.campuses[person.campus] || 0) + 1;
+          if (person.yearOfStudy) {
+            distributedSites[siteIndex].stats.yearsOfStudy[person.yearOfStudy] = (distributedSites[siteIndex].stats.yearsOfStudy[person.yearOfStudy] || 0) + 1;
+          }
+          if (person.isVisitor) distributedSites[siteIndex]. stats.visitors++;
+          if (person.previousMissionsCount === 0) distributedSites[siteIndex].stats.firstTimers++;
+          else if (person.previousMissionsCount === 1) distributedSites[siteIndex].stats.experienced++;
+          else distributedSites[siteIndex]. stats.veterans++;
+          
+          siteIndex = (siteIndex + 1) % distributedSites.length;
+        });
+        
+        const finalAssigned = distributedSites.reduce((sum, site) => sum + site.missionaries.length, 0);
+        console.log(`✅ After force-assignment: ${finalAssigned}/${totalRegistrations} assigned`);
+      }
 
       // Delete old distributions
       await prisma.missionDistribution.deleteMany({
@@ -1079,9 +1169,9 @@ class MissionController {
       const distributions = [];
       for (const site of distributedSites) {
         for (const missionary of site.missionaries) {
-          distributions.push({
-            missionId: id,
-            registrationId: missionary.id,
+          distributions. push({
+            missionId:  id,
+            registrationId:  missionary.id,
             siteNumber: site.siteNumber,
           });
         }
@@ -1091,20 +1181,25 @@ class MissionController {
         data: distributions,
       });
 
+      // ✅ Final verification after saving to database
+      console.log(`💾 Saved ${distributions.length} distributions to database`);
+
       res.json({
         success: true,
-        message: 'Missionaries distributed successfully',
+        message: `Successfully distributed all ${totalRegistrations} missionaries`,
         data: {
-          sites: distributedSites. map((site) => ({
+          totalRegistrations,
+          totalDistributed: distributions.length,
+          sites: distributedSites.map((site) => ({
             siteNumber: site.siteNumber,
-            total: site.stats.total,
-            male: site.stats.male,
+            total: site.stats. total,
+            male: site. stats.male,
             female: site.stats.female,
-            firstTimers: site.stats.firstTimers,
-            experienced: site.stats.experienced,
+            firstTimers: site.stats. firstTimers,
+            experienced:  site.stats.experienced,
             veterans: site.stats.veterans,
             campuses: site.stats.campuses,
-            yearsOfStudy: site. stats.yearsOfStudy,
+            yearsOfStudy: site.stats. yearsOfStudy,
             visitors: site.stats.visitors,
           })),
         },
@@ -1261,7 +1356,7 @@ class MissionController {
 
     summarySheet.addRow([]); // Empty row
 
-    // ✅ FIX: Add headers AFTER setting up the row
+    // Headers
     const summaryHeaderRow = summarySheet.getRow(4);
     summaryHeaderRow.values = ['Site', 'Total', 'Male', 'Female', 'First Timers', 'Experienced', 'Veterans', 'Visitors'];
     summaryHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -1409,7 +1504,7 @@ class MissionController {
       statsCell.alignment = { horizontal: 'center' };
       siteSheet.getRow(2).height = 20;
 
-      // ✅ FIX: Properly set header row with values
+      // Headers
       const siteHeaderRow = siteSheet.getRow(3);
       siteHeaderRow.values = ['#', 'First Name', 'Last Name', 'Gender', 'Campus', 'Year of Study', 'Mission Experience', 'Email', 'Phone', 'Church/Status'];
       siteHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -1442,7 +1537,7 @@ class MissionController {
 
       // Add missionary data
       siteMissionaries.forEach((m, index) => {
-        // ✅ FIX: Better handling of church/visitor status
+        // Church/visitor status
         let churchStatus = '';
         if (m.isVisitor) {
           churchStatus = m.homeChurch || 'Visitor';
@@ -1461,7 +1556,7 @@ class MissionController {
           m.previousMissionsCount === 1 ? '1 Mission' : 
           `${m.previousMissionsCount}+ Missions`,
           m.email,
-          m.phone || '',
+          m.phone || 'N/A',
           churchStatus
         ]);
 
@@ -1474,16 +1569,31 @@ class MissionController {
           };
         }
 
+        // ✅ Highlight N/A cells in yellow
+        row.eachCell((cell) => {
+          if (cell.value === 'N/A') {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFFFF3CD' }
+            };
+            cell.font = { 
+              color: { argb: 'FF856404' },
+              italic: true 
+            };
+          }
+        });
+
         // Highlight visitors
         if (m.isVisitor) {
-          row.getCell(5).fill = { // Campus column
+          row.getCell(5).fill = {
             type: 'pattern',
             pattern: 'solid',
             fgColor: { argb: 'FFE7E6FF' }
           };
           row.getCell(5).font = { color: { argb: 'FF6B46C1' }, bold: true };
           
-          row.getCell(10).fill = { // Church/Status column
+          row.getCell(10).fill = {
             type: 'pattern',
             pattern: 'solid',
             fgColor: { argb: 'FFE7E6FF' }
@@ -1572,6 +1682,22 @@ class MissionController {
             ]);
             row.font = { size: 11 };
           });
+
+        // ✅ Add incomplete data note
+        const incompleteCount = siteMissionaries.filter(m => 
+          !m.phone || !m.yearOfStudy
+        ).length;
+
+        if (incompleteCount > 0) {
+          siteSheet.addRow([]); // Empty row
+          
+          const noteRow = siteSheet.addRow([
+            '⚠️ Note:',
+            `${incompleteCount} ${incompleteCount === 1 ? 'person has' : 'people have'} incomplete data (shown as N/A)`
+          ]);
+          noteRow.font = { italic: true, color: { argb: 'FF856404' } };
+          siteSheet.mergeCells(noteRow.number, 1, noteRow.number, 10);
+        }
       }
     }
 
@@ -1596,7 +1722,7 @@ class MissionController {
     allTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
     allSheet.getRow(1).height = 25;
 
-    // ✅ FIX: Properly set header row with values
+    // Headers
     const allHeaderRow = allSheet.getRow(2);
     allHeaderRow.values = ['#', 'Site', 'First Name', 'Last Name', 'Gender', 'Campus', 'Year', 'Experience', 'Email', 'Phone', 'Church/Status'];
     allHeaderRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -1632,7 +1758,7 @@ class MissionController {
       });
 
     allMissionaries.forEach((m, index) => {
-      // ✅ FIX: Better handling of church/visitor status
+      // Church/visitor status
       let churchStatus = '';
       if (m.isVisitor) {
         churchStatus = m.homeChurch || 'Visitor';
@@ -1647,12 +1773,12 @@ class MissionController {
         m.lastName,
         m.gender,
         getCampusDisplayName(m.campus),
-        m.yearOfStudy || 'N/A',
+        m.yearOfStudy ? `Year ${m.yearOfStudy}` : 'N/A',
         m.previousMissionsCount === 0 ? 'First Time' : 
         m.previousMissionsCount === 1 ? '1 Mission' : 
         `${m.previousMissionsCount}+ Missions`,
         m.email,
-        m.phone || '',
+        m.phone || 'N/A',
         churchStatus
       ]);
 
@@ -1664,7 +1790,21 @@ class MissionController {
         };
       }
 
+      // ✅ Highlight N/A cells
       row.eachCell((cell) => {
+        if (cell.value === 'N/A') {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFF3CD' }
+          };
+          cell.font = { 
+            color: { argb: 'FF856404' },
+            italic: true 
+          };
+        }
+        
+        // Add borders
         cell.border = {
           top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
           left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
@@ -1693,7 +1833,7 @@ class MissionController {
       message: error.message,
     });
   }
-  }
+}
 
   // Helper methods
   async parseCSV(buffer) {
@@ -1712,171 +1852,253 @@ class MissionController {
   }
 
   async parseExcel(buffer) {
-    const workbook = new ExcelJS. Workbook();
-    await workbook.xlsx.load(buffer);
-    const worksheet = workbook.worksheets[0];
-    
-    const results = [];
-    const headers = [];
-    
-    worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) {
-        // Store headers
-        row.eachCell((cell) => {
-          headers.push(cell.value?. toString(). toLowerCase(). trim());
-        });
-      } else {
-        const rowData = {};
-        row. eachCell((cell, colNumber) => {
-          const header = headers[colNumber - 1];
-          if (header) {
-            rowData[header] = cell.value;
-          }
-        });
-        if (Object.keys(rowData).length > 0) {
-          results. push(rowData);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  const worksheet = workbook.worksheets[0];
+  
+  const results = [];
+  const headers = [];
+  
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) {
+      // ✅ FIX: Keep original case of column names
+      row.eachCell((cell) => {
+        const headerValue = cell.value?.toString().trim();
+        headers.push(headerValue);
+      });
+      
+      // Log the actual column names found (helps with debugging)
+      console.log('\n📋 Excel columns found:');
+      headers.forEach((h, i) => {
+        console.log(`  ${i + 1}. "${h}"`);
+      });
+      console.log('');
+    } else {
+      const rowData = {};
+      row.eachCell((cell, colNumber) => {
+        const header = headers[colNumber - 1];
+        if (header) {
+          rowData[header] = cell.value;
         }
+      });
+      if (Object.keys(rowData).length > 0) {
+        results.push(rowData);
       }
-    });
+    }
+  });
 
-    return results;
-  }
+  console.log(`✅ Parsed ${results.length} data rows from Excel`);
+  return results;
+}
 
  async normalizeRegistration(row, missionId) {
-  // ✅ EMAIL IS NOW OPTIONAL
-  let email = (
-    row.email || 
-    row.Email || 
-    row['Email Address'] || 
-    row['email address'] ||
-    row.contact
-  )?.toString().trim().toLowerCase();
-
-  // If email contains '@', it's valid. Otherwise, generate a placeholder
-  if (!email || !email.includes('@')) {
-    // Generate unique email placeholder using phone or name
-    const phoneRaw = 
-      row.phone || 
-      row.Phone || 
-      row['Phone Number'] || 
-      row['phone number'] ||
-      row.Contact ||
-      row.contact;
-    
-    const phone = phoneRaw?.toString().trim();
-    
-    if (phone && !phone.includes('@')) {
-      // Use phone number as identifier
-      email = `${phone.replace(/\s+/g, '')}@placeholder.mission`;
-    } else {
-      // Use name + random string as identifier
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substring(7);
-      email = `missionary_${timestamp}_${random}@placeholder.mission`;
+  console.log('\n🔍 Processing registration row.. .');
+  
+  // ============================================================================
+  // HELPER:  Smart column finder
+  // ============================================================================
+  function getColumn(row, ...possibleNames) {
+    for (const name of possibleNames) {
+      if (row[name] !== undefined && row[name] !== null && row[name] !== '') {
+        return row[name];
+      }
     }
     
-    console.log(`⚠️ No email provided, generated placeholder: ${email}`);
+    const rowKeys = Object.keys(row);
+    for (const name of possibleNames) {
+      const lowerName = name.toLowerCase();
+      const matchingKey = rowKeys.find(k => k.toLowerCase() === lowerName);
+      if (matchingKey && row[matchingKey] !== undefined && row[matchingKey] !== null && row[matchingKey] !== '') {
+        return row[matchingKey];
+      }
+    }
+    
+    return null;
   }
 
-  // ✅ PARSE NAME FROM VARIOUS FORMATS
+  // ============================================================================
+  // NAME - CRITICAL:  Must have a name!  (MOVED TO TOP)
+  // ============================================================================
   let firstName, lastName;
 
-  // Try to find separate first/last names
-  const firstNameRaw = row.firstName || row['First Name'] || row.firstname || row['first name'];
-  const lastNameRaw = row.lastName || row['Last Name'] || row.lastname || row['last name'];
+  const firstNameRaw = getColumn(row, 'firstName', 'First Name', 'firstname', 'first name');
+  const lastNameRaw = getColumn(row, 'lastName', 'Last Name', 'lastname', 'last name');
 
   if (firstNameRaw && lastNameRaw) {
-    firstName = firstNameRaw.toString().trim();
-    lastName = lastNameRaw.toString().trim();
+    firstName = firstNameRaw.toString().trim().toLowerCase();
+    lastName = lastNameRaw.toString().trim().toLowerCase();
   } else {
-    // Look for combined name column
-    const fullNameRaw = 
-      row.name || 
-      row.Name || 
-      row['Full Name'] || 
-      row['full name'] || 
-      row.fullname || 
-      row.FullName ||
-      row['Student Name'] ||
-      row['student name'];
+    const fullNameRaw = getColumn(row, 'Name', 'name', 'Full Name', 'full name', 'fullname');
 
     if (fullNameRaw) {
-      const nameParts = this.parseFullName(fullNameRaw.toString().trim());
-      firstName = nameParts.firstName;
+      const nameParts = this.parseFullName(fullNameRaw. toString().trim());
+      firstName = nameParts. firstName;
       lastName = nameParts.lastName;
     }
   }
 
+  // ✅ NAME IS THE ONLY REQUIRED FIELD
   if (!firstName || !lastName) {
-    throw new Error(`Name is required. Please provide either 'First Name' & 'Last Name' columns, or a 'Name'/'Full Name' column.`);
+    throw new Error(`Name is required. Cannot process row without a name.`);
   }
 
-  // Normalize campus
-  const campusRaw = row.campus || row.Campus || row['Campus Name'] || row['campus name'];
+  // ============================================================================
+  // EMAIL - Generate placeholder if missing (MOVED AFTER NAME)
+  // ============================================================================
+  let email = getColumn(row, 'email', 'Email', 'Email Address', 'contact', 'Contact');
+
+  if (email) {
+    email = email.toString().trim().toLowerCase();
+  }
+
+  if (!email || !email.includes('@')) {
+    const phoneRaw = getColumn(row, 'Contact', 'contact', 'Phone', 'phone', 'Phone Number');
+    const phone = phoneRaw?. toString().trim();
+    
+    if (phone && ! phone.includes('@')) {
+      email = `${phone. replace(/\s+/g, '')}@placeholder.mission`;
+    } else {
+      // ✅ NOW firstName and lastName exist! 
+      const nameSlug = `${firstName}_${lastName}`
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]/g, '');
+      
+      email = `${nameSlug}@placeholder.mission`;
+    }
+    
+    console.log(`⚠️ No email provided for ${firstName} ${lastName}, generated: ${email}`);
+  }
+
+  // ============================================================================
+  // CAMPUS - Use Source_Sheet as fallback, normalize properly
+  // ============================================================================
+  let campusRaw = getColumn(row, 'Campus', 'campus', 'Campus Name', 'campus name');
+  
+  // Try Source_Sheet if Campus is empty
+  if (!campusRaw || campusRaw.toString().trim() === '') {
+    console.log(`  ⚠️ Campus empty for ${firstName} ${lastName}, trying Source_Sheet... `);
+    campusRaw = getColumn(row, 'Source_Sheet', 'source_sheet', 'Source Sheet', 'source sheet');
+  }
+  
   const campus = normalizeCampus(campusRaw);
   const isVisitor = campus === 'VISITOR';
+  
+  console.log(`  Campus for ${firstName} ${lastName}: "${campusRaw}" → ${campus} (visitor: ${isVisitor})`);
 
-  // ✅ Handle various year of study column names
-  const yearRaw = 
-    row.year || 
-    row.Year || 
-    row['Year of Study'] || 
-    row['year of study'] || 
-    row.yearOfStudy ||
-    row['What´s your year of study?'] || 
-    row["What's your year of study?"] ||
-    row['Whats your year of study?'] ||
-    row['year'];
+  // ============================================================================
+  // YEAR OF STUDY - Accept null/empty (shows as "N/A" in distribution)
+  // ============================================================================
+  const yearRaw = getColumn(
+    row,
+    "What´s your year of study?",
+    "What's your year of study?",
+    "Whats your year of study?",
+    'Year of Study',
+    'year of study',
+    'Year',
+    'year',
+    'yearOfStudy'
+  );
   
-  const yearOfStudy = normalizeYearOfStudy(yearRaw);
-
-  // Auto-detect mission experience
-  const autoDetected = await detectMissionExperience(email, missionId, prisma);
+  const yearOfStudy = normalizeYearOfStudy(yearRaw); // Returns null if empty
   
-  // Merge with user input
-  const userInput = 
-    row.previousMissions || 
-    row['Previous Missions'] || 
-    row['Number of missions attended before'] || 
-    row.missionsAttended ||
-    row['previous missions'] ||
-    row['missions attended'];
-  
-  const experience = mergeMissionExperience(userInput, autoDetected);
-
-  // ✅ Handle contact/phone variations
-  const phoneRaw = 
-    row.phone || 
-    row.Phone || 
-    row['Phone Number'] || 
-    row['phone number'] ||
-    row.Contact ||
-    row.contact;
-  
-  // Only use as phone if it's numeric and not an email
-  let phone = null;
-  if (phoneRaw && !phoneRaw.toString().includes('@')) {
-    phone = phoneRaw.toString().trim();
+  if (! yearOfStudy) {
+    console.log(`  ⚠️ Year of study empty for ${firstName} ${lastName} - will show as N/A`);
   }
 
-  // Get gender
-  const genderRaw = (row.gender || row.Gender)?.toString().toUpperCase().trim();
-  const gender = genderRaw === 'FEMALE' || genderRaw === 'F' ? 'FEMALE' : 'MALE';
+  // ============================================================================
+  // MISSION EXPERIENCE - Default to 0 (First Time) if missing
+  // ============================================================================
+  const missionExpRaw = getColumn(
+    row,
+    'Number of missions attended before',
+    'number of missions attended before',
+    'Previous Missions',
+    'previous missions',
+    'previousMissions',
+    'missions attended',
+    'missionsAttended'
+  );
+
+  const autoDetected = await detectMissionExperience(email, missionId, prisma);
+  const experience = mergeMissionExperience(missionExpRaw, autoDetected);
+  
+  if (!missionExpRaw) {
+    console.log(`  ⚠️ Mission experience empty for ${firstName} ${lastName}, using:  ${experience. source}`);
+  }
+
+  // ============================================================================
+  // PHONE/CONTACT - Accept null/empty (shows as "N/A" in distribution)
+  // ============================================================================
+  const phoneRaw = getColumn(row, 'Contact', 'contact', 'Phone', 'phone', 'Phone Number');
+  
+  let phone = null;
+  if (phoneRaw && ! phoneRaw.toString().includes('@')) {
+    phone = phoneRaw.toString().trim();
+  } else {
+    console.log(`  ⚠️ Phone empty for ${firstName} ${lastName} - will show as N/A`);
+  }
+
+  // ============================================================================
+  // GENDER - Default to MALE if missing (better than excluding person)
+  // ============================================================================
+  let genderRaw = getColumn(row, 'Gender', 'gender', 'Sex', 'sex');
+  
+  let gender;
+  if (! genderRaw || genderRaw.toString().trim() === '') {
+    console.log(`  ⚠️ Gender missing for ${firstName} ${lastName}, defaulting to MALE`);
+    gender = 'MALE'; // Default - distribute as male for balance purposes
+  } else {
+    const genderStr = genderRaw.toString().toUpperCase().trim();
+    gender = genderStr === 'FEMALE' || genderStr === 'F' ? 'FEMALE' :  'MALE';
+  }
+
+  // ============================================================================
+  // HOME CHURCH - For visitors, try to capture their institution/church
+  // ============================================================================
+  let homeChurch = null;
+  if (isVisitor) {
+    // Try multiple possible column names for home church/institution
+    homeChurch = getColumn(
+      row, 
+      'homeChurch', 
+      'Home Church', 
+      'home church', 
+      'church',
+      'Campus', // For visitors, campus column might have their university
+      'campus'
+    )?.toString().trim();
+    
+    // If we found the campus name and it's a visitor, use that as homeChurch
+    if (! homeChurch && campusRaw) {
+      homeChurch = campusRaw. toString().trim();
+    }
+    
+    if (!homeChurch) {
+      homeChurch = 'External Member'; // Better default than N/A
+    }
+    
+    console.log(`  Home church/institution for ${firstName} ${lastName}:  ${homeChurch}`);
+  }
+
+  console.log(`✅ ${firstName} ${lastName} processed successfully`);
 
   return {
     firstName,
     lastName,
-    email, // Now can be placeholder
-    phone,
+    email,
+    phone:  phone || null,  // null will show as "N/A" in exports
     gender,
     campus,
-    yearOfStudy,
+    yearOfStudy:  yearOfStudy || null,  // null will show as "N/A" 
     isVisitor,
-    homeChurch: isVisitor ? (row.homeChurch || row['Home Church'])?.toString().trim() : null,
+    homeChurch,
     previousMissionsCount: experience.count,
     isFirstTime: experience.isFirstTime,
   };
 }
+
 
 // ============================================================================
 // HELPER METHOD - Keep this as is
@@ -2021,11 +2243,13 @@ async uploadRegistrations(req, res) {
     // Insert into database
     const created = await Promise.all(
       normalized.map((reg) =>
-        prisma.missionRegistration.upsert({
-          where: {
-            missionId_email: {
+        prisma.missionRegistration. upsert({
+          where:  {
+            missionId_email_firstName_lastName: {  // ✅ CHANGED
               missionId: id,
               email: reg.email,
+              firstName: reg.firstName,             // ✅ ADDED
+              lastName: reg.lastName,               // ✅ ADDED
             },
           },
           update: reg,

@@ -26,12 +26,10 @@ const CAMPUS_VARIATIONS = {
     'main',
     'main campus',
     'uon main',
-
   ],
   CHIROMO: [
     'chiromo',
     'chiromo campus',
-  
   ],
   LOWER_KABETE: [
     'lower kabete',
@@ -79,6 +77,61 @@ const CAMPUS_VARIATIONS = {
     'outside',
     'non-uon',
     'non uon',
+    // Educational institutions (non-UoN)
+    'not yet joined',
+    'yet to join',
+    'not joined',
+    'havent joined',
+    "haven't joined",
+    'not a student',
+    'not student',
+    'egerton',
+    'egerton university',
+    'tum',
+    'technical university',
+    'technical university of mombasa',
+    'kusda',
+    'ku sda',
+    'kenyatta university',
+    'ku',
+    'mount kenya',
+    'mount kenya university',
+    'mku',
+    'africa leadership',
+    'africa leadership university',
+    'alu',
+    'maseno',
+    'maseno school',
+    'maseno university',
+    'strathmore',
+    'strathmore university',
+    'usiu',
+    'daystar',
+    'jkuat',
+    'moi university',
+    'kabarak',
+    'kabarak university',
+    'mmust',
+    'masinde muliro',
+    'kiriri',
+    'kiriri womens',
+    'kiriri women',
+    'catholic university',
+    'cuea',
+    'kcau',
+    'kimc',
+    'tuk',
+    'technical university of kenya',
+    'multimedia',
+    'multimedia university',
+    'kemu',
+    'embu university',
+    'kisii university',
+    'laikipia university',
+    'pwani university',
+    'high school',
+    'secondary school',
+    'college',
   ],
 };
 
@@ -95,7 +148,7 @@ function levenshteinDistance(a, b) {
 
   for (let i = 1; i <= b.length; i++) {
     for (let j = 1; j <= a.length; j++) {
-      if (b. charAt(i - 1) === a.charAt(j - 1)) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
         matrix[i][j] = matrix[i - 1][j - 1];
       } else {
         matrix[i][j] = Math.min(
@@ -111,7 +164,7 @@ function levenshteinDistance(a, b) {
 }
 
 export function normalizeCampus(input) {
-  if (!input) return 'MAIN';
+  if (!input) return 'VISITOR'; // ✅ Changed default from MAIN to VISITOR
 
   const cleaned = input
     .toString()
@@ -120,9 +173,29 @@ export function normalizeCampus(input) {
     .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, ' ');
 
+  // ✅ Early detection for common visitor patterns
+  const visitorKeywords = [
+    'not yet',
+    'yet to',
+    'not joined',
+    'not a student',
+    'university',
+    'college',
+    'high school',
+    'secondary',
+  ];
+  
+  for (const keyword of visitorKeywords) {
+    if (cleaned.includes(keyword)) {
+      console.log(`🔍 Campus: "${input}" → "VISITOR" (keyword: "${keyword}")`);
+      return 'VISITOR';
+    }
+  }
+
   // Exact match
   for (const [campus, variations] of Object.entries(CAMPUS_VARIATIONS)) {
     if (variations.includes(cleaned)) {
+      console.log(`🔍 Campus: "${input}" → "${campus}" (exact match)`);
       return campus;
     }
   }
@@ -131,28 +204,52 @@ export function normalizeCampus(input) {
   for (const [campus, variations] of Object.entries(CAMPUS_VARIATIONS)) {
     for (const variation of variations) {
       if (cleaned.includes(variation) || variation.includes(cleaned)) {
+        console.log(`🔍 Campus: "${input}" → "${campus}" (partial match: "${variation}")`);
         return campus;
       }
     }
   }
 
-  // Fuzzy match
-  let bestMatch = 'MAIN';
+  // Fuzzy match - but prioritize VISITOR for unknown entries
+  let bestMatch = 'VISITOR'; // ✅ Changed default from MAIN
   let bestDistance = Infinity;
+  let matchFound = false;
 
-  for (const [campus, variations] of Object.entries(CAMPUS_VARIATIONS)) {
+  // Only check UoN campuses for fuzzy matching
+  const UON_CAMPUSES = [
+    'KENYA_SCIENCE',
+    'MEDICAL_SCHOOL', 
+    'MAIN',
+    'CHIROMO',
+    'LOWER_KABETE',
+    'PARKLANDS',
+    'UPPER_KABETE',
+    'PUEA',
+    'ASSOCIATE',
+    'KIKUYU'
+  ];
+
+  for (const campus of UON_CAMPUSES) {
+    const variations = CAMPUS_VARIATIONS[campus];
     for (const variation of variations) {
       const distance = levenshteinDistance(cleaned, variation);
-      const threshold = Math.max(3, variation.length * 0.3);
+      const threshold = Math.max(2, variation.length * 0.25); // Stricter threshold
 
       if (distance < threshold && distance < bestDistance) {
         bestDistance = distance;
         bestMatch = campus;
+        matchFound = true;
       }
     }
   }
 
-  console.log(`🔍 Campus: "${input}" → "${bestMatch}"`);
+  // If no good match found, default to VISITOR
+  if (!matchFound || bestDistance > 3) {
+    console.log(`🔍 Campus: "${input}" → "VISITOR" (no UoN match found)`);
+    return 'VISITOR';
+  }
+
+  console.log(`🔍 Campus: "${input}" → "${bestMatch}" (fuzzy match, distance: ${bestDistance})`);
   return bestMatch;
 }
 
@@ -181,17 +278,17 @@ export function validateCampusNames(campusNames) {
     normalized: {},
   };
 
-  const uniqueNames = [... new Set(campusNames)];
+  const uniqueNames = [...new Set(campusNames)];
 
   for (const name of uniqueNames) {
     const normalized = normalizeCampus(name);
     results.normalized[name] = normalized;
 
-    const cleaned = name. toString().trim().toLowerCase();
+    const cleaned = name.toString().trim().toLowerCase();
     const variations = CAMPUS_VARIATIONS[normalized];
     
-    if (variations. includes(cleaned)) {
-      results. valid.push({ original: name, normalized });
+    if (variations.includes(cleaned)) {
+      results.valid.push({ original: name, normalized });
     } else {
       results.warnings.push({
         original: name,
